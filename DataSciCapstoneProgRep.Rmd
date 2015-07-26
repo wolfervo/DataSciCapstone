@@ -1,0 +1,101 @@
+---
+title: "Data Science Capstone Milestone Report"
+author: "Erich Wolf"
+date: "Sunday, July 26, 2015"
+output: html_document
+---
+## Executive Summary 
+This report is a summary of the work I have done so far on the Coursera Data Science Specialization Capstone. It will review how I have loaded and explored the text data. My ideas on how to proceed are also included.
+
+## 1. Load Data
+The data used for this analysis are three datasets from SwitfKey provided by the course and can be found at [here]( https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip). The three files are downloaded into my working directory and then read into r with the following code which also loads the required libraries:
+```{r Read In Data, cache=TRUE}
+blogfile <- file("en_US.blogs.txt", open = "rb")
+blogs <- readLines(blogfile, encoding = "UTF-8", warn=FALSE)
+newsfile <- file("en_US.news.txt", open = "rb")
+news <- readLines(newsfile, encoding = "UTF-8", warn=FALSE)
+twitterfile <- file("en_US.twitter.txt", open = "rb")
+twitter <- readLines(twitterfile, encoding = "UTF-8", warn=FALSE)
+library(NLP)
+library(tm)
+library(RColorBrewer)
+library(wordcloud)
+```
+
+## 2. Explore Data
+I have counted the lines, total number of words, and unique number of words in each data set. 
+```{r Data Summary, cache=TRUE}
+lctwitter <- as.numeric(length(twitter))
+lcnews <- as.numeric(length(news))
+lcblogs <- as.numeric(length(blogs))
+wordstwitter <- unlist(strsplit(twitter,"\\s+"))
+wctwitter <- as.numeric(length(wordstwitter))
+uwordstwitter <- unique(wordstwitter)
+uwctwitter <- as.numeric(length(uwordstwitter))
+wordsnews <- unlist(strsplit(news,"\\s+"))
+wcnews <- as.numeric(length(wordsnews))
+uwordsnews <- unique(wordsnews)
+uwcnews <- as.numeric(length(uwordsnews))
+wordsblogs <- unlist(strsplit(blogs,"\\s+"))
+wcblogs <- as.numeric(length(wordsblogs))
+uwordsblogs <- unique(wordsblogs)
+uwcblogs <- as.numeric(length(uwordsblogs))
+
+DataSet <- c("# of Lines", "# of Words", "# of Unique Words")
+TwitterData <- c(lctwitter, wctwitter, uwctwitter)
+NewsData <- c(lcnews, wcnews, uwcnews)
+BlogsData <- c(lcblogs, wcblogs, uwcblogs)
+
+datatable <- as.data.frame(rbind(TwitterData,NewsData,BlogsData))
+colnames(datatable) <-DataSet
+datatable
+```
+I took a sample of 10,000 entries from each data set and combined them to create a single data set and reduce the processing time required for computations.
+```{r Sampling, cache=TRUE}
+sampletwitter <- sample(twitter,10000)
+sampleblogs <- sample(blogs,10000)
+samplenews <- sample(news,10000)
+samplecombined <- c(sampletwitter,sampleblogs,samplenews)
+```
+I cleaned the smaller sample to eliminate numbers, URLs, excess whitespace, and profanity 
+```{r Clean Data, cache=TRUE}
+sampleCorpus <- VCorpus(VectorSource(samplecombined))
+cleanCorpus <- tm_map(sampleCorpus, 
+                      content_transformer(function(x) iconv(x, to="UTF-8", sub="byte")), 
+                      mc.cores=1)
+cleanCorpus <- tm_map(cleanCorpus, content_transformer(tolower), lazy = TRUE)
+cleanCorpus <- tm_map(cleanCorpus, content_transformer(removePunctuation))
+cleanCorpus <- tm_map(cleanCorpus, content_transformer(removeNumbers))
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x) 
+cleanCorpus <- tm_map(cleanCorpus, content_transformer(removeURL))
+cleanCorpus <- tm_map(cleanCorpus, stripWhitespace)
+cleanCorpus <- tm_map(cleanCorpus, removeWords, stopwords("english"))
+profanity <- readLines("en_profanity.txt")
+cleanCorpus <- tm_map(cleanCorpus, removeWords, profanity)
+```
+
+A histogram of the top 10 most frequently used words in the English language is provided
+```{r Histogram, cache=TRUE}
+the <- as.numeric(sum(sapply(gregexpr("[^*]the[^*]",cleanCorpus),length)))
+be <- as.numeric(sum(sapply(gregexpr("[^*]be[^*]",cleanCorpus),length)))
+to <- as.numeric(sum(sapply(gregexpr("[^*]to[^*]",cleanCorpus),length)))
+of <- as.numeric(sum(sapply(gregexpr("[^*]of[^*]",cleanCorpus),length)))
+and <- as.numeric(sum(sapply(gregexpr("[^*]and[^*]",cleanCorpus),length)))
+a <- as.numeric(sum(sapply(gregexpr("[^*]a[^*]",cleanCorpus),length)))
+ins <- as.numeric(sum(sapply(gregexpr("[^*]in[^*]",cleanCorpus),length)))
+that <- as.numeric(sum(sapply(gregexpr("[^*]that[^*]",cleanCorpus),length)))
+have <- as.numeric(sum(sapply(gregexpr("[^*]have[^*]",cleanCorpus),length)))
+i <- as.numeric(sum(sapply(gregexpr("[^*]i[^*]",cleanCorpus),length)))
+labels <- c("the","be","to","of","and","a","in","that","have","i")
+y <- c(the,be,to,of,and,a,ins,that,have,i)
+barplot(height=y,names.arg=labels)
+```
+
+A WordCloud of the cleaned data is also provided, please not that the WordCloud and Corpus functions exclude different stopwords so the two plots may nit match up exactly.
+```{r WordCloud, cache=TRUE}
+suppressWarnings(wordcloud(cleanCorpus, max.words = 500))
+```
+
+## 3. Path Forward
+My path forward will include developing n-grams of the data to identify common words and combinations of words, using these n-grams to create a model that will predict the next word following an n-gram, and determining how to make predictions for inputs that are not covered by the developed n-grams.
+
